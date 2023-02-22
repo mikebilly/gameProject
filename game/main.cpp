@@ -20,6 +20,7 @@ SDL_Window* window = NULL;
 SDL_Renderer* renderer = NULL;
 SDL_Surface* screenSurface = NULL;
 
+bool prvDir = 0;
 void ClearScreen()
 {
 COORD cursorPosition;	cursorPosition.X = 0;	cursorPosition.Y = 0;	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), cursorPosition);
@@ -120,12 +121,16 @@ SDL_Rect carRect;
 const float FRICTION = 0.1f;
 const float VELOCITY_X_FACTOR = 4;
 const float ROTATE_FACTOR = 2; // 3
+const float deltaTicks = 0.025;
+
+const float GRAVITY_ACCELERATION = 5.0f;
+
 const float JUMP_VELOCITY = 7;
 const float JUMP_DRAG_ACCELERATION = 100;
-const float GRAVITY_ACCELERATION = 5.0f;
+
+
 const float MAX_BOOST_VELOCITY = 8;
 const float BOOST_ACCELERATION = 6;
-const float deltaTicks = 0.025;
 
 struct Point {
     float x, y;
@@ -298,7 +303,8 @@ public:
     float boostVelocityX = 0;
     float boostVelocityY = 0;
     float boostVelocity = 0;
-
+    float initialBoostAccelerationX = 0;
+    float initialBoostAccelerationY = 0;
 //    vector<vector<Point>> corner{2, vector<Point>(2)};
 
     Car(float weight, float mass, float velocityX, float velocityY, float accelerationX, float accelerationY, float xPos, float yPos, bool onGround, bool jumping, float angle, bool dir, SDL_RendererFlip flip, bool clockWise, bool pointing, float width) :
@@ -566,20 +572,21 @@ public:
                 gravityVelocityY = GRAVITY_ACCELERATION;
             }
             else {
-                gravityVelocityY = 0;
+                gravityVelocityY = GRAVITY_ACCELERATION/5;
             }
-        }
 
+        }
+        if (dir != prvDir) {
+            boostVelocity /= 5;
+        }
+//        gravityVelocityY = 0;
         boostVelocity += sign*BOOST_ACCELERATION * deltaTicks;
         boostVelocity = min(boostVelocity, MAX_BOOST_VELOCITY);
         boostVelocity = max(boostVelocity, 0.0f);
 
         Point projected = findParallelVector(tmp[1], tmp[0], boostVelocity);
-        float initialBoostVelocityX = projected.x;
-        float initialBoostVelocityY = projected.y;
-
-        boostVelocityX = initialBoostVelocityX;
-        boostVelocityY = initialBoostVelocityY;
+        boostVelocityX = projected.x;
+        boostVelocityY = projected.y;
     }
 
     void moveCar() {
@@ -672,6 +679,11 @@ public:
         if (boostVelocity != 0) {
             goingVelocityX = 0;
         }
+
+//        boostVelocity = min(boostVelocity, MAX_BOOST_VELOCITY);
+//        boostVelocity = max(boostVelocity, 0.0f);
+
+        /// ///////////////////////////////////////////////////////
         velocityX = goingVelocityX + jumpVelocityX + boostVelocityX;
         velocityY =  gravityVelocityY + jumpVelocityY + boostVelocityY;
 
@@ -680,9 +692,32 @@ public:
 
         xPos += (velocityX + accelerationX * deltaTicks);
         yPos += (velocityY + accelerationY * deltaTicks);
-
-//        xPos += velocityX;
-//        yPos += velocityY;
+        /// ///////////////////////////////////////////////////////
+//
+//        if (curSign == -1) {
+//            std::cerr << "stopping boost" << "\n";
+//            if (abs(initialBoostAccelerationX) * deltaTicks > abs(boostVelocityX)) {
+//                boostVelocityX = 0;
+//                initialBoostAccelerationX = 0;
+//            }
+//            else {
+//                boostVelocityX += initialBoostAccelerationX * deltaTicks;
+//            }
+//
+//            if (abs(initialBoostAccelerationY) * deltaTicks > abs(boostVelocityY)) {
+//                boostVelocityY = 0;
+//                initialBoostAccelerationY = 0;
+//            }
+//            else {
+//                boostVelocityY += initialBoostAccelerationY * deltaTicks;
+//            }
+//        }
+//        else {
+//            boostVelocityX += initialBoostAccelerationX * deltaTicks;
+//            boostVelocityY += initialBoostAccelerationY * deltaTicks;
+//        }
+        std::cerr << "boostX = " << boostVelocityX << "\n";
+        std::cerr << "boostY = " << boostVelocityY << "\n";
         std::cerr << "jump velocity X = " << jumpVelocityX << ", " << "dragX = " << initialJumpDragAccelerationX << "\n";
         std::cerr << "jump velocity Y = " << jumpVelocityY << ", " << "dragX = " << initialJumpDragAccelerationY << "\n";
         if (jumpVelocityY != 0) {
@@ -712,6 +747,8 @@ public:
         else {
             jumpVelocityY += initialJumpDragAccelerationY * deltaTicks;
         }
+
+
 
 //        if (abs(initialGravityAccelerationY) * deltaTicks > abs(gravityVelocityY)) {
 //            gravityVelocityY = 0;
@@ -1386,6 +1423,7 @@ int main(int argc, char* argv[]) {
                 car.goingVelocityX = 0;
             }
         }
+
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
                 case SDL_QUIT:
@@ -1452,17 +1490,20 @@ int main(int argc, char* argv[]) {
         }
 
         if (state[SDL_SCANCODE_RIGHTBRACKET]) {
-            car.boost(1.0);
             curSign = 1.0;
+            car.boost(1.0);
         }
         else {
 //            car.boostVelocityX = 0;
 //            car.boostVelocityY = 0;
 //            car.boostVelocity = 0;
-            curSign = -1;
+            curSign = -1.0;
             car.boost(-1.0);
+//            car.initialBoostAccelerationX = ;
+
+//            car.boost(-1.0);
         }
-        prvSign = curSign;
+
 //        if (state[])
         SDL_SetRenderDrawColor(renderer, 221, 160, 221, 255);
         SDL_RenderClear(renderer);
@@ -1490,6 +1531,8 @@ int main(int argc, char* argv[]) {
 //            std::cerr << "\n";
 //        }
 //        ClearScreen();
+        prvSign = curSign;
+        prvDir = car.dir;
 
     }
     closeEverything();
